@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Página de Clima</title>
+    <style>
+      :root {
+        --bg1: #0f172a;
+        --bg2: #1e3a8a;
+        --card: rgba(255, 255, 255, 0.12);
+        --text: #f8fafc;
+        --muted: #cbd5e1;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color: var(--text);
+        background: linear-gradient(135deg, var(--bg1), var(--bg2));
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+      }
+
+      .weather-card {
+        width: 100%;
+        max-width: 460px;
+        background: var(--card);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 20px;
+        padding: 1.25rem;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      }
+
+      h1 { margin: 0 0 1rem; font-size: 1.5rem; }
+
+      form {
+        display: flex;
+        gap: .5rem;
+        margin-bottom: 1rem;
+      }
+
+      input {
+        flex: 1;
+        border: none;
+        border-radius: 12px;
+        padding: .75rem .9rem;
+        font-size: 1rem;
+      }
+
+      button {
+        border: none;
+        border-radius: 12px;
+        padding: .75rem 1rem;
+        font-size: 1rem;
+        cursor: pointer;
+        font-weight: 700;
+        background: #22c55e;
+        color: #052e16;
+      }
+
+      .info {
+        display: grid;
+        gap: .5rem;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255,255,255,0.15);
+        padding-bottom: .4rem;
+      }
+
+      .label { color: var(--muted); }
+      .temp { font-size: 2rem; font-weight: 800; }
+      .status { min-height: 1.4rem; color: #fde68a; margin-top: .5rem; }
+    </style>
+  </head>
+  <body>
+    <main class="weather-card">
+      <h1>🌤️ Clima en tiempo real</h1>
+      <form id="weatherForm">
+        <input id="cityInput" type="text" placeholder="Escribe una ciudad (ej. Madrid)" required />
+        <button type="submit">Buscar</button>
+      </form>
+
+      <section class="info" id="weatherResult" hidden>
+        <div class="row"><span class="label">Ciudad</span><strong id="cityName"></strong></div>
+        <div class="row"><span class="label">Temperatura</span><strong class="temp" id="temp"></strong></div>
+        <div class="row"><span class="label">Condición</span><strong id="condition"></strong></div>
+        <div class="row"><span class="label">Humedad</span><strong id="humidity"></strong></div>
+        <div class="row"><span class="label">Viento</span><strong id="wind"></strong></div>
+      </section>
+      <p class="status" id="status"></p>
+    </main>
+
+    <script>
+      const form = document.getElementById('weatherForm');
+      const cityInput = document.getElementById('cityInput');
+      const weatherResult = document.getElementById('weatherResult');
+      const statusText = document.getElementById('status');
+
+      const cityName = document.getElementById('cityName');
+      const temp = document.getElementById('temp');
+      const condition = document.getElementById('condition');
+      const humidity = document.getElementById('humidity');
+      const wind = document.getElementById('wind');
+
+      async function fetchWeather(city) {
+        statusText.textContent = 'Consultando clima...';
+        weatherResult.hidden = true;
+
+        const geocodingUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=es&format=json`;
+        const geocodingRes = await fetch(geocodingUrl);
+        const geocodingData = await geocodingRes.json();
+
+        if (!geocodingData.results || geocodingData.results.length === 0) {
+          throw new Error('No encontré esa ciudad.');
+        }
+
+        const place = geocodingData.results[0];
+        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto`;
+        const weatherRes = await fetch(weatherUrl);
+        const weatherData = await weatherRes.json();
+
+        const codeMap = {
+          0: 'Despejado', 1: 'Mayormente despejado', 2: 'Parcialmente nublado', 3: 'Nublado',
+          45: 'Niebla', 48: 'Niebla con escarcha', 51: 'Llovizna ligera', 53: 'Llovizna moderada',
+          55: 'Llovizna densa', 61: 'Lluvia ligera', 63: 'Lluvia moderada', 65: 'Lluvia intensa',
+          71: 'Nieve ligera', 73: 'Nieve moderada', 75: 'Nieve intensa', 80: 'Chubascos ligeros',
+          81: 'Chubascos moderados', 82: 'Chubascos violentos', 95: 'Tormenta'
+        };
+
+        cityName.textContent = `${place.name}, ${place.country}`;
+        temp.textContent = `${weatherData.current.temperature_2m} °C`;
+        condition.textContent = codeMap[weatherData.current.weather_code] || 'Condición desconocida';
+        humidity.textContent = `${weatherData.current.relative_humidity_2m}%`;
+        wind.textContent = `${weatherData.current.wind_speed_10m} km/h`;
+
+        weatherResult.hidden = false;
+        statusText.textContent = '';
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const city = cityInput.value.trim();
+        if (!city) return;
+
+        try {
+          await fetchWeather(city);
+        } catch (err) {
+          statusText.textContent = err.message || 'Error al consultar el clima.';
+          weatherResult.hidden = true;
+        }
+      });
+    </script>
+  </body>
+</html>
